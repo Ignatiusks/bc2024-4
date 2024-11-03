@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs').promises;
 const { Command } = require('commander');
 const path = require('path');
+const superagent = require('superagent'); 
 const program = new Command();
 
 program
@@ -13,6 +14,7 @@ program.parse(process.argv);
 
 const options = program.opts();
 const cacheDir = options.cache;
+
 
 const server = http.createServer(async (req, res) => {
   const urlParts = req.url.split('/');
@@ -28,13 +30,26 @@ const server = http.createServer(async (req, res) => {
 
   switch (req.method) {
     case 'GET':
+      console.log(`GET запит на httpCode: ${httpCode}`);
       try {
-        const data = await fs.readFile(filePath); // исправлено на fs.readFile
+        const data = await fs.readFile(filePath);
+        console.log('Файл знайдено в кеші');
         res.writeHead(200, { 'Content-Type': 'image/jpeg' });
         res.end(data);
       } catch (err) {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Not Found');
+        console.log('Файл не знайдено в кеші, виконується запит до http.cat');
+        try {
+          const response = await superagent.get(`https://http.cat/${httpCode}`);
+          const image = response.body;
+          await fs.writeFile(filePath, image);
+          console.log('Файл успішно завантажено та збережено в кеші');
+          res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+          res.end(image);
+        } catch (error) {
+          console.error('Помилка запиту до http.cat', error.message);
+          res.writeHead(404, { 'Content-Type': 'text/plain' });
+          res.end('Not Found');
+        }
       }
       break;
 
@@ -74,5 +89,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(options.port, options.host, () => {
-  console.log(`Сервер запущен на http://${options.host}:${options.port}`);
+  console.log(`Сервер запущено на http://${options.host}:${options.port}`);
 });
+
